@@ -347,15 +347,21 @@ function calculate(){
   const recBox = document.getElementById("reconcile");
   if(refunded != null){
     const delta = balance - refunded;            // Expected − Refunded
+    const diff = refunded - balance;             // взгляд провайдера: на сколько вернул больше/меньше
     const ok = Math.abs(delta) < 0.01;
+    // человекочитаемый вывод о направлении расхождения
+    let verdict;
+    if(ok) verdict = "Провайдер вернул ровно столько, сколько должно быть на балансе.";
+    else if(diff > 0) verdict = `Провайдер вернул на <b>${fmt(diff)}</b> БОЛЬШЕ, чем должно быть на балансе (переплата) — основание для вопроса провайдеру.`;
+    else verdict = `Провайдер вернул на <b>${fmt(Math.abs(diff))}</b> МЕНЬШЕ, чем должно быть на балансе (недоплата) — основание для вопроса провайдеру.`;
     recBox.className = "reconcile show " + (ok ? "ok" : "bad");
     recBox.innerHTML =
       `<div class="rtitle">${ok ? "✅ Сходится" : "⚠️ Расхождение"}</div>
        <div class="rline"><span>Expected (должно быть на балансе)</span><span>${fmt(balance)}</span></div>
        <div class="rline"><span>Refunded (вернул провайдер)${autoRef?' · из строки Debit':''}</span><span>${fmt(refunded)}</span></div>
-       <div class="rline rdelta"><span>Разница (Expected − Refunded)</span>
-         <span class="${ok?'pos':'neg'}">${fmt(delta)}</span></div>
-       ${ok ? "" : `<div class="bnote" style="margin-top:8px">Расхождение ${fmt(Math.abs(delta))} — основание для вопроса провайдеру.</div>`}`;
+       <div class="rline rdelta"><span>Разница (Refunded − Expected)</span>
+         <span class="${ok?'pos':'neg'}">${diff>0?'+':''}${fmt(diff)}</span></div>
+       <div class="bnote" style="margin-top:8px">${verdict}</div>`;
   } else {
     recBox.className = "reconcile";
     recBox.innerHTML = "";
