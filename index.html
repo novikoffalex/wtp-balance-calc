@@ -125,7 +125,7 @@ TOP_UP	ПОПОЛНЕНИЕ	200.00	USD	Deposit	—	21.06.2026, 00:45 UTC
       <div>
         <div class="blabel">Expected — должно быть на балансе</div>
         <div class="bval" id="balanceVal">—</div>
-        <div class="bnote">Пополнения − траты (auth) − комиссии − выводы. Деклайны на баланс не влияют (учтены только их комиссии).</div>
+        <div class="bnote">Пополнения + выпуск (нач. баланс) − траты (auth) − комиссии − выводы. Деклайны на баланс не влияют (учтены только их комиссии).</div>
       </div>
       <div style="text-align:right">
         <div class="blabel">Refunded — вернул провайдер</div>
@@ -171,7 +171,7 @@ const TYPES = [
     kw:[/\bwithdraw/i, /вывод/i] },
   { key:"decline",  sign:0,  label:"Деклайны",    badge:"b-decline",  cls:"declined",
     kw:[/\bdecline/i, /отклон/i] },
-  { key:"creation", sign:0,  label:"Выпуск карты",badge:"b-creation", cls:"",
+  { key:"creation", sign:+1, label:"Выпуск (нач. баланс)",badge:"b-creation", cls:"",
     kw:[/\bcreation\b/i, /\bcard created\b/i, /создани/i] },
   { key:"spend",    sign:-1, label:"Траты (auth)",badge:"b-spend",    cls:"",
     kw:[/\bauth\b/i, /\bpending\b/i, /\bdebit\b/i, /авторизац/i, /успешн/i, /трат/i] },
