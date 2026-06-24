@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WTP · Калькулятор баланса карты</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --text:#e7eaf0; --muted:#8b93a3; --accent:#5b8cff; --accent2:#3a6dff;
+    --green:#34d399; --red:#f87171; --amber:#fbbf24; --graytype:#9aa3b2;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.45;
+    padding:28px 18px 60px;
+  }
+  .wrap{max-width:920px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 4px;font-weight:650}
+  .sub{color:var(--muted);font-size:13.5px;margin:0 0 22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  label.lbl{display:block;font-size:13px;color:var(--muted);margin:0 0 8px}
+  textarea{
+    width:100%; min-height:200px; resize:vertical;
+    background:var(--panel2); color:var(--text);
+    border:1px solid var(--line); border-radius:10px; padding:12px 13px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px;
+    outline:none;
+  }
+  textarea:focus{border-color:var(--accent)}
+  .row{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  button{
+    background:var(--accent2); color:#fff; border:none; border-radius:10px;
+    padding:11px 20px; font-size:14px; font-weight:600; cursor:pointer;
+  }
+  button:hover{background:var(--accent)}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+  button.ghost:hover{color:var(--text);border-color:var(--muted)}
+  .hint{color:var(--muted);font-size:12px}
+
+  .result{margin-top:22px;display:none}
+  .balance-box{
+    background:linear-gradient(135deg,#1b2233,#171a21);
+    border:1px solid var(--line); border-radius:var(--radius);
+    padding:22px 24px; display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  }
+  .balance-box .blabel{color:var(--muted);font-size:13px;margin-bottom:4px}
+  .balance-box .bval{font-size:38px;font-weight:700;letter-spacing:-0.5px}
+  .balance-box .bnote{color:var(--muted);font-size:12px;margin-top:6px;max-width:380px}
+  .pos{color:var(--green)} .neg{color:var(--red)}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:14px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .stat .k{color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px}
+  .stat .v{font-size:20px;font-weight:650;margin-top:5px}
+  .stat .c{color:var(--muted);font-size:11.5px;margin-top:2px}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+  table{width:100%;border-collapse:collapse;margin-top:18px;font-size:13px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:500;font-size:12px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr.declined td{color:var(--graytype)}
+  .badge{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;white-space:nowrap}
+  .b-topup{background:rgba(52,211,153,.15);color:var(--green)}
+  .b-spend{background:rgba(248,113,113,.15);color:var(--red)}
+  .b-fee{background:rgba(251,191,36,.15);color:var(--amber)}
+  .b-decline{background:rgba(154,163,178,.15);color:var(--graytype)}
+  .b-withdraw{background:rgba(248,113,113,.15);color:var(--red)}
+  .b-creation{background:rgba(91,140,255,.15);color:var(--accent)}
+  .b-unknown{background:rgba(251,191,36,.2);color:var(--amber)}
+
+  .warn{margin-top:14px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);
+        border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--amber)}
+  .warn b{color:#fde68a}
+  details{margin-top:18px}
+  summary{cursor:pointer;color:var(--muted);font-size:13px}
+  .small{font-size:12px;color:var(--muted)}
+  .footer{margin-top:30px;color:var(--muted);font-size:11.5px;text-align:center}
+  code{background:var(--panel2);padding:1px 5px;border-radius:5px;font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>💳 Калькулятор баланса карты</h1>
+  <p class="sub">Вставь таблицу «Транзакции» (или «Транзакции API») из админки — посчитаю итоговый баланс с учётом пополнений, трат, комиссий, выводов и деклайнов.</p>
+
+  <div class="card">
+    <label class="lbl" for="input">Транзакции (Ctrl/Cmd+V — выделил таблицу в админке и вставил сюда)</label>
+    <textarea id="input" placeholder="DECLINE	ОТКЛОНЕНО	20.00	USD	ANTHROPIC* CLAUDE...	No sufficient funds	21.06.2026, 10:53 UTC
+FEE	КОМИССИЯ	0.40	USD	Transaction fee (0.45) (decline)	—	21.06.2026, 10:53 UTC
+TOP_UP	ПОПОЛНЕНИЕ	200.00	USD	Deposit	—	21.06.2026, 00:45 UTC
+..."></textarea>
+    <div class="row">
+      <button id="calc">Посчитать баланс</button>
+      <button id="clear" class="ghost">Очистить</button>
+      <span class="hint" id="parsedHint"></span>
+    </div>
+  </div>
+
+  <div class="result" id="result">
+    <div class="balance-box">
+      <div>
+        <div class="blabel">Итоговый расчётный баланс</div>
+        <div class="bval" id="balanceVal">—</div>
+        <div class="bnote">Пополнения − траты (auth) − комиссии − выводы. Деклайны на баланс не влияют (учтены только их комиссии).</div>
+      </div>
+      <div style="text-align:right">
+        <div class="blabel">Всего списано (траты + комиссии + выводы)</div>
+        <div class="bval neg" id="spentVal" style="font-size:26px">—</div>
+      </div>
+    </div>
+
+    <div class="grid" id="stats"></div>
+
+    <table id="breakdown">
+      <thead><tr><th>Категория</th><th>Кол-во</th><th class="num">Сумма</th><th class="num">Влияние на баланс</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <div id="warnBox"></div>
+
+    <details>
+      <summary>Показать разобранные строки</summary>
+      <table id="rows">
+        <thead><tr><th>#</th><th>Тип</th><th class="num">Сумма</th><th>Строка</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </details>
+  </div>
+
+  <div class="footer">WantToPay · внутренний инструмент саппорта · расчёт идёт локально в браузере, данные никуда не отправляются</div>
+</div>
+
+<script>
+const fmt = n => (n<0?"−":"") + "$" + Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+// --- классификация типа операции ---
+// ключевые слова в порядке приоритета; ищем по всей строке (EN + RU, регистронезависимо)
+const TYPES = [
+  { key:"topup",    sign:+1, label:"Пополнения",  badge:"b-topup",    cls:"",
+    kw:[/\btop[_\s-]?up\b/i, /пополнен/i, /\bdeposit\b/i] },
+  { key:"fee",      sign:-1, label:"Комиссии",    badge:"b-fee",      cls:"",
+    kw:[/\bfee\b/i, /комисс/i] },
+  { key:"withdraw", sign:-1, label:"Выводы",      badge:"b-withdraw", cls:"",
+    kw:[/\bwithdraw/i, /вывод/i] },
+  { key:"decline",  sign:0,  label:"Деклайны",    badge:"b-decline",  cls:"declined",
+    kw:[/\bdecline/i, /отклон/i] },
+  { key:"creation", sign:0,  label:"Выпуск карты",badge:"b-creation", cls:"",
+    kw:[/\bcreation\b/i, /\bcard created\b/i, /создани/i] },
+  { key:"spend",    sign:-1, label:"Траты (auth)",badge:"b-spend",    cls:"",
+    kw:[/\bauth\b/i, /\bdebit\b/i, /авторизац/i, /трат/i] },
+];
+
+function classify(line){
+  // FEE раньше AUTH: в карточном виде комиссии тоже помечены AUTH 0.40,
+  // но строка содержит "fee" в описании -> ловим как комиссию.
+  for(const t of TYPES){
+    if(t.kw.some(re=>re.test(line))) return t;
+  }
+  return null;
+}
+
+// --- извлечение суммы: привязываемся к "USD" (есть в каждой строке) ---
+function parseAmount(line){
+  // 1) число прямо перед/слитно с USD: "0.40 USD", "39.59USD", "200,00 USD"
+  //    в классе числа НЕ должно быть пробелов — иначе через табы прилипает хвост времени (…:12 -> 200.00)
+  let m = line.match(/(\d[\d.,]*)\s*USD\b/i);
+  if(m){ const v=normNum(m[1]); if(v!=null) return v; }
+  // 2) fallback: токены по табам — первый "чистый" денежный токен
+  const parts = line.split(/\t+|\s{2,}/).map(s=>s.trim()).filter(Boolean);
+  for(const p of parts){
+    if(/^\d{1,3}([.,]\d{3})*([.,]\d{1,2})?$/.test(p) && !isDateLike(p)){
+      const v=normNum(p); if(v!=null) return v;
+    }
+  }
+  return null;
+}
+function isDateLike(s){ return /^\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}/.test(s) || /\d{1,2}:\d{2}/.test(s); }
+
+function normNum(raw){
+  let s = String(raw).replace(/\s|USD/gi,"").trim();
+  if(!s) return null;
+  const hasDot = s.includes("."), hasComma = s.includes(",");
+  if(hasDot && hasComma){
+    // последний разделитель = десятичный
+    if(s.lastIndexOf(",") > s.lastIndexOf(".")){ s = s.replace(/\./g,"").replace(",", "."); }
+    else { s = s.replace(/,/g,""); }
+  } else if(hasComma){
+    // только запятая -> десятичный разделитель
+    s = s.replace(",", ".");
+  }
+  const v = parseFloat(s);
+  return isNaN(v) ? null : v;
+}
+
+function calculate(){
+  const text = document.getElementById("input").value;
+  const lines = text.split(/\r?\n/).map(l=>l.replace(/ /g," ").trim()).filter(Boolean);
+
+  const cats = {}; TYPES.forEach(t=>cats[t.key]={t, count:0, sum:0});
+  const parsed = [], unparsed = [];
+
+  for(const line of lines){
+    // пропускаем шапки таблицы
+    if(/^(ТИП|TYPE|СУММА|AMOUNT|МАГАЗИН|ВАЛЮТА|ДАТА|ОШИБКА|МЕРЧАНТ)\b/i.test(line) && !/USD/i.test(line)) continue;
+    const t = classify(line);
+    const amt = parseAmount(line);
+    if(!t || amt==null){ unparsed.push(line); continue; }
+    cats[t.key].count++; cats[t.key].sum += amt;
+    parsed.push({t, amt, line});
+  }
+
+  if(parsed.length===0 && unparsed.length>0){
+    document.getElementById("parsedHint").textContent = "Не удалось разобрать ни одной строки — проверь формат вставки.";
+    document.getElementById("parsedHint").style.color = "var(--red)";
+    document.getElementById("result").style.display="none";
+    return;
+  }
+
+  let balance = 0, spent = 0;
+  TYPES.forEach(t=>{
+    const c = cats[t.key];
+    balance += t.sign * c.sum;
+    if(t.sign < 0) spent += c.sum;
+  });
+
+  // --- вывод ---
+  document.getElementById("balanceVal").textContent = fmt(balance);
+  document.getElementById("balanceVal").className = "bval " + (balance>=0?"pos":"neg");
+  document.getElementById("spentVal").textContent = fmt(spent);
+
+  const colorOf = {topup:"var(--green)",spend:"var(--red)",fee:"var(--amber)",
+                   withdraw:"var(--red)",decline:"var(--graytype)",creation:"var(--accent)"};
+  document.getElementById("stats").innerHTML = TYPES.map(t=>{
+    const c = cats[t.key];
+    const impact = t.sign===0 ? "не влияет" : fmt(t.sign*c.sum);
+    return `<div class="stat">
+      <div class="k"><span class="dot" style="background:${colorOf[t.key]}"></span>${t.label}</div>
+      <div class="v">${fmt(c.sum)}</div>
+      <div class="c">${c.count} оп. · ${impact}</div>
+    </div>`;
+  }).join("");
+
+  document.querySelector("#breakdown tbody").innerHTML = TYPES.map(t=>{
+    const c = cats[t.key];
+    const impact = t.sign===0 ? '<span class="small">не влияет</span>' :
+      `<span class="${t.sign>0?'pos':'neg'}">${fmt(t.sign*c.sum)}</span>`;
+    return `<tr><td><span class="badge ${t.badge}">${t.label}</span></td>
+      <td>${c.count}</td><td class="num">${fmt(c.sum)}</td><td class="num">${impact}</td></tr>`;
+  }).join("") +
+    `<tr><td><b>Итого баланс</b></td><td></td><td></td>
+      <td class="num"><b class="${balance>=0?'pos':'neg'}">${fmt(balance)}</b></td></tr>`;
+
+  document.querySelector("#rows tbody").innerHTML = parsed.map((p,i)=>
+    `<tr class="${p.t.cls}"><td>${i+1}</td>
+      <td><span class="badge ${p.t.badge}">${p.t.label}</span></td>
+      <td class="num">${fmt(p.amt)}</td>
+      <td class="small">${escapeHtml(p.line).slice(0,90)}</td></tr>`).join("");
+
+  const warnBox = document.getElementById("warnBox");
+  if(unparsed.length){
+    warnBox.innerHTML = `<div class="warn"><b>${unparsed.length} строк(и) не распознано</b> и не вошли в расчёт:<br>` +
+      unparsed.slice(0,8).map(l=>"• "+escapeHtml(l).slice(0,100)).join("<br>") +
+      (unparsed.length>8?`<br>…и ещё ${unparsed.length-8}`:"") + "</div>";
+  } else { warnBox.innerHTML = ""; }
+
+  const h = document.getElementById("parsedHint");
+  h.style.color = "var(--muted)";
+  h.textContent = `Разобрано строк: ${parsed.length}${unparsed.length?`, пропущено: ${unparsed.length}`:""}`;
+  document.getElementById("result").style.display="block";
+}
+
+function escapeHtml(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+document.getElementById("calc").addEventListener("click", calculate);
+document.getElementById("clear").addEventListener("click", ()=>{
+  document.getElementById("input").value="";
+  document.getElementById("result").style.display="none";
+  document.getElementById("parsedHint").textContent="";
+  document.getElementById("input").focus();
+});
+document.getElementById("input").addEventListener("paste", ()=>setTimeout(calculate,30));
+</script>
+</body>
+</html>
