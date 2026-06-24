@@ -51,6 +51,21 @@
   .balance-box .bnote{color:var(--muted);font-size:12px;margin-top:6px;max-width:380px}
   .pos{color:var(--green)} .neg{color:var(--red)}
 
+  .refrow{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+  .refrow input{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:9px;padding:9px 12px;font-size:14px;width:160px;outline:none;
+    font-variant-numeric:tabular-nums}
+  .refrow input:focus{border-color:var(--accent)}
+
+  .reconcile{margin-top:16px;border-radius:var(--radius);padding:16px 18px;border:1px solid var(--line);display:none}
+  .reconcile.show{display:block}
+  .reconcile.ok{background:rgba(52,211,153,.08);border-color:rgba(52,211,153,.35)}
+  .reconcile.bad{background:rgba(248,113,113,.08);border-color:rgba(248,113,113,.4)}
+  .reconcile .rtitle{font-size:15px;font-weight:650;margin-bottom:8px}
+  .reconcile .rline{display:flex;justify-content:space-between;gap:16px;font-size:13.5px;padding:3px 0}
+  .reconcile .rline span:last-child{font-variant-numeric:tabular-nums;font-weight:600}
+  .reconcile .rdelta{font-size:14px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:14px}
   .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
   .stat .k{color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px}
@@ -84,8 +99,8 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>💳 Калькулятор баланса карты</h1>
-  <p class="sub">Вставь таблицу «Транзакции» (или «Транзакции API») из админки — посчитаю итоговый баланс с учётом пополнений, трат, комиссий, выводов и деклайнов.</p>
+  <h1>💳 Сверка баланса карты (Expected vs Refunded)</h1>
+  <p class="sub">Вставь таблицу транзакций из админки — посчитаю <b>Expected</b> (сколько должно быть на балансе). Укажи <b>Refunded</b> (что вернул провайдер) — покажу, сходится ли.</p>
 
   <div class="card">
     <label class="lbl" for="input">Транзакции (Ctrl/Cmd+V — выделил таблицу в админке и вставил сюда)</label>
@@ -93,8 +108,12 @@
 FEE	КОМИССИЯ	0.40	USD	Transaction fee (0.45) (decline)	—	21.06.2026, 10:53 UTC
 TOP_UP	ПОПОЛНЕНИЕ	200.00	USD	Deposit	—	21.06.2026, 00:45 UTC
 ..."></textarea>
+    <div class="refrow">
+      <label class="lbl" for="refunded" style="margin:0">Refunded — сколько вернул провайдер ($), для сверки:</label>
+      <input id="refunded" type="text" inputmode="decimal" placeholder="напр. 49.71" autocomplete="off">
+    </div>
     <div class="row">
-      <button id="calc">Посчитать баланс</button>
+      <button id="calc">Посчитать Expected</button>
       <button id="clear" class="ghost">Очистить</button>
       <span class="hint" id="parsedHint"></span>
     </div>
@@ -103,7 +122,7 @@ TOP_UP	ПОПОЛНЕНИЕ	200.00	USD	Deposit	—	21.06.2026, 00:45 UTC
   <div class="result" id="result">
     <div class="balance-box">
       <div>
-        <div class="blabel">Итоговый расчётный баланс</div>
+        <div class="blabel">Expected — должно быть на балансе</div>
         <div class="bval" id="balanceVal">—</div>
         <div class="bnote">Пополнения − траты (auth) − комиссии − выводы. Деклайны на баланс не влияют (учтены только их комиссии).</div>
       </div>
@@ -112,6 +131,8 @@ TOP_UP	ПОПОЛНЕНИЕ	200.00	USD	Deposit	—	21.06.2026, 00:45 UTC
         <div class="bval neg" id="spentVal" style="font-size:26px">—</div>
       </div>
     </div>
+
+    <div class="reconcile" id="reconcile"></div>
 
     <div class="grid" id="stats"></div>
 
@@ -232,6 +253,25 @@ function calculate(){
   document.getElementById("balanceVal").className = "bval " + (balance>=0?"pos":"neg");
   document.getElementById("spentVal").textContent = fmt(spent);
 
+  // --- сверка Expected vs Refunded ---
+  const recBox = document.getElementById("reconcile");
+  const refunded = normNum(document.getElementById("refunded").value);
+  if(refunded != null){
+    const delta = balance - refunded;            // Expected − Refunded
+    const ok = Math.abs(delta) < 0.01;
+    recBox.className = "reconcile show " + (ok ? "ok" : "bad");
+    recBox.innerHTML =
+      `<div class="rtitle">${ok ? "✅ Сходится" : "⚠️ Расхождение"}</div>
+       <div class="rline"><span>Expected (расчётный баланс)</span><span>${fmt(balance)}</span></div>
+       <div class="rline"><span>Refunded (вернул провайдер)</span><span>${fmt(refunded)}</span></div>
+       <div class="rline rdelta"><span>Разница (Expected − Refunded)</span>
+         <span class="${ok?'pos':'neg'}">${fmt(delta)}</span></div>
+       ${ok ? "" : `<div class="bnote" style="margin-top:8px">Расхождение ${fmt(Math.abs(delta))} — основание для вопроса провайдеру.</div>`}`;
+  } else {
+    recBox.className = "reconcile";
+    recBox.innerHTML = "";
+  }
+
   const colorOf = {topup:"var(--green)",spend:"var(--red)",fee:"var(--amber)",
                    withdraw:"var(--red)",decline:"var(--graytype)",creation:"var(--accent)"};
   document.getElementById("stats").innerHTML = TYPES.map(t=>{
@@ -283,6 +323,9 @@ document.getElementById("clear").addEventListener("click", ()=>{
   document.getElementById("input").focus();
 });
 document.getElementById("input").addEventListener("paste", ()=>setTimeout(calculate,30));
+document.getElementById("refunded").addEventListener("input", ()=>{
+  if(document.getElementById("result").style.display==="block") calculate();
+});
 </script>
 </body>
 </html>
