@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>WTP · Создать задачу провайдеру</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --text:#e7eaf0; --muted:#8b93a3; --accent:#5b8cff; --accent2:#3a6dff;
+    --green:#34d399; --red:#f87171; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.45;padding:28px 18px 60px}
+  .wrap{max-width:760px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 4px;font-weight:650}
+  .sub{color:var(--muted);font-size:13.5px;margin:0 0 22px}
+  .sub a{color:var(--accent)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted)}
+  label.full{grid-column:1 / -1}
+  input{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:9px;padding:10px 12px;font-size:14px;outline:none;width:100%}
+  input:focus{border-color:var(--accent)}
+  .req{color:var(--red)}
+  .calcrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:14px;
+    padding-top:14px;border-top:1px solid var(--line)}
+  .diffbox{margin-top:14px;font-size:13.5px;color:var(--muted)}
+  .diffbox b{color:var(--text);font-variant-numeric:tabular-nums}
+  .pos{color:var(--green)} .neg{color:var(--red)}
+  .row{display:flex;gap:12px;align-items:center;margin-top:18px;flex-wrap:wrap}
+  button{background:var(--accent2);color:#fff;border:none;border-radius:10px;
+    padding:12px 22px;font-size:14px;font-weight:600;cursor:pointer}
+  button:hover{background:var(--accent)}
+  button:disabled{opacity:.5;cursor:default}
+  .status{font-size:13px}
+  .ok{color:var(--green)} .err{color:var(--red)}
+  .footer{margin-top:26px;color:var(--muted);font-size:11.5px;text-align:center}
+  @media(max-width:560px){.grid,.calcrow{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📋 Создать задачу провайдеру</h1>
+  <p class="sub">Создаёт задачу в Lark («Вопросы провайдеру»). Expected/Refunded посчитай в <a href="index.html">калькуляторе</a> и перенеси сюда (или дай ссылку с параметрами).</p>
+
+  <div class="card">
+    <div class="grid">
+      <label>Email клиента <span class="req">*</span><input id="email" placeholder="client@example.com" autocomplete="off"></label>
+      <label>Провайдер <span class="req">*</span><input id="provider" placeholder="Fuaty" list="providers" autocomplete="off">
+        <datalist id="providers"><option value="Fuaty"></option></datalist></label>
+      <label class="full">Внешний ID (Card ID)<input id="externalId" placeholder="ddef82007020a04eab92c..." autocomplete="off"></label>
+      <label>Номер карты<input id="cardNumber" placeholder="**** **** **** 5055" autocomplete="off"></label>
+      <label class="full">Manychat клиента<input id="manychatUrl" placeholder="https://app.manychat.com/..." autocomplete="off"></label>
+      <label class="full">Админка клиента<input id="adminUrl" placeholder="https://console.wanttopay.cloud/nova/resources/cards/..." autocomplete="off"></label>
+    </div>
+
+    <div class="calcrow">
+      <label>Expected ($) <span class="req">*</span><input id="expected" type="text" inputmode="decimal" placeholder="95.12" autocomplete="off"></label>
+      <label>Refunded ($)<input id="refunded" type="text" inputmode="decimal" placeholder="49.71" autocomplete="off"></label>
+      <label>Разница (авто)<input id="difference" type="text" placeholder="—" readonly></label>
+    </div>
+    <div class="diffbox" id="diffNote"></div>
+
+    <div class="row">
+      <button id="create">Создать задачу в Lark</button>
+      <span class="status" id="status"></span>
+    </div>
+  </div>
+
+  <div class="footer">WantToPay · внутренний инструмент саппорта · <span id="ver">task v2026-06-24.1</span></div>
+</div>
+
+<script>
+const WEBHOOK = "https://novikoff.app.n8n.cloud/webhook/provider-question";
+const $ = id => document.getElementById(id);
+const num = v => { const s=String(v||"").replace(/[^\d.,-]/g,"").replace(",","."); const n=parseFloat(s); return isNaN(n)?null:n; };
+const fmt = n => (n<0?"−":"")+"$"+Math.abs(n).toFixed(2);
+
+// префилл из query-параметров (?expected=..&refunded=..&externalId=.. и т.д.)
+(function prefill(){
+  const p = new URLSearchParams(location.search);
+  ["email","provider","externalId","cardNumber","manychatUrl","adminUrl","expected","refunded"].forEach(k=>{
+    if(p.has(k)) $(k).value = p.get(k);
+  });
+  recalcDiff();
+})();
+
+function recalcDiff(){
+  const e = num($("expected").value), r = num($("refunded").value);
+  const note = $("diffNote");
+  if(e!=null && r!=null){
+    const diff = r - e;                       // Refunded − Expected (взгляд провайдера)
+    $("difference").value = (diff>0?"+":"")+fmt(diff);
+    if(Math.abs(diff) < 0.01) note.innerHTML = "✅ Сходится — провайдер вернул сколько должно.";
+    else if(diff > 0) note.innerHTML = `⚠️ Провайдер вернул на <b>${fmt(diff)}</b> БОЛЬШЕ, чем должно (переплата).`;
+    else note.innerHTML = `⚠️ Провайдер вернул на <b>${fmt(Math.abs(diff))}</b> МЕНЬШЕ, чем должно (недоплата).`;
+  } else { $("difference").value = "—"; note.textContent = ""; }
+}
+$("expected").addEventListener("input", recalcDiff);
+$("refunded").addEventListener("input", recalcDiff);
+
+$("create").addEventListener("click", async ()=>{
+  const email = $("email").value.trim();
+  const provider = $("provider").value.trim();
+  const expected = num($("expected").value);
+  const st = $("status");
+
+  if(!email){ st.className="status err"; st.textContent="Укажи Email клиента"; return; }
+  if(!provider){ st.className="status err"; st.textContent="Укажи провайдера"; return; }
+  if(expected==null){ st.className="status err"; st.textContent="Укажи Expected"; return; }
+
+  const refunded = num($("refunded").value);
+  const difference = refunded!=null ? (refunded - expected) : null;
+
+  const payload = {
+    title: `запрос провайдеру, ${email}`,
+    clientEmail: email,
+    provider,
+    externalId: $("externalId").value.trim(),
+    cardNumber: $("cardNumber").value.trim(),
+    manychatUrl: $("manychatUrl").value.trim(),
+    adminUrl: $("adminUrl").value.trim(),
+    expected,
+    refunded: refunded!=null ? refunded : "",
+    difference: difference!=null ? difference : ""
+  };
+
+  st.className="status"; st.textContent="Создаю…";
+  $("create").disabled = true;
+  try{
+    const r = await fetch(WEBHOOK, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)});
+    let j = {}; try{ j = await r.json(); }catch(e){}
+    if(r.ok && j.ok !== false){
+      st.className="status ok"; st.textContent="✅ Задача создана в Lark";
+    } else {
+      st.className="status err"; st.textContent="⚠️ Ошибка Lark (code "+(j.lark_code ?? r.status)+")";
+    }
+  }catch(e){
+    st.className="status err"; st.textContent="⚠️ Сеть/CORS: "+e.message;
+  }finally{
+    $("create").disabled = false;
+  }
+});
+</script>
+</body>
+</html>
