@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>WTP · Сверка баланса карты</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💳</text></svg>">
 
@@ -154,7 +157,7 @@ TOP_UP	ПОПОЛНЕНИЕ	200.00	USD	Deposit	—	21.06.2026, 00:45 UTC
     </details>
   </div>
 
-  <div class="footer">WantToPay · внутренний инструмент саппорта · расчёт идёт локально в браузере, данные никуда не отправляются</div>
+  <div class="footer">WantToPay · внутренний инструмент саппорта · расчёт идёт локально в браузере, данные никуда не отправляются · <span id="ver">v2026-06-24.11</span></div>
 </div>
 
 <script>
@@ -365,8 +368,13 @@ function calculate(){
          <span class="${ok?'pos':'neg'}">${diff>0?'+':''}${fmt(diff)}</span></div>
        <div class="bnote" style="margin-top:8px">${verdict}</div>`;
   } else {
-    recBox.className = "reconcile";
-    recBox.innerHTML = "";
+    // Refunded не задан (нет строки Debit и не введён вручную) — показываем секцию с подсказкой
+    recBox.className = "reconcile show";
+    recBox.innerHTML =
+      `<div class="rtitle">Сверка с провайдером</div>
+       <div class="rline"><span>Expected (должно быть на балансе)</span><span>${fmt(balance)}</span></div>
+       <div class="rline"><span>Refunded (вернул провайдер)</span><span>—</span></div>
+       <div class="bnote" style="margin-top:8px">Введи <b>Refunded</b> (сколько вернул провайдер) в поле выше — покажу разницу. Если в выписке есть строка <b>Debit</b>, она подставится автоматически.</div>`;
   }
 
   const colorOf = {topup:"var(--green)",spend:"var(--red)",fee:"var(--amber)",
