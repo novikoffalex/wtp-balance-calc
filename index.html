@@ -71,6 +71,11 @@
   .reconcile .rline span:last-child{font-variant-numeric:tabular-nums;font-weight:600}
   .reconcile .rdelta{font-size:14px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
 
+  .tasklink{display:inline-flex;align-items:center;gap:8px;text-decoration:none;
+    background:var(--accent2);color:#fff;border-radius:10px;padding:11px 20px;
+    font-size:14px;font-weight:600}
+  .tasklink:hover{background:var(--accent)}
+
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:14px}
   .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
   .stat .k{color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px}
@@ -139,6 +144,8 @@ TOP_UP	ПОПОЛНЕНИЕ	200.00	USD	Deposit	—	21.06.2026, 00:45 UTC
 
     <div class="reconcile" id="reconcile"></div>
 
+    <div id="taskAction" style="margin-top:14px"></div>
+
     <div class="grid" id="stats"></div>
 
     <table id="breakdown">
@@ -157,7 +164,7 @@ TOP_UP	ПОПОЛНЕНИЕ	200.00	USD	Deposit	—	21.06.2026, 00:45 UTC
     </details>
   </div>
 
-  <div class="footer">WantToPay · внутренний инструмент саппорта · расчёт идёт локально в браузере, данные никуда не отправляются · <span id="ver">v2026-06-24.11</span></div>
+  <div class="footer">WantToPay · внутренний инструмент саппорта · расчёт идёт локально в браузере, данные никуда не отправляются · <span id="ver">v2026-06-24.12</span></div>
 </div>
 
 <script>
@@ -377,6 +384,13 @@ function calculate(){
        <div class="bnote" style="margin-top:8px">Введи <b>Refunded</b> (сколько вернул провайдер) в поле выше — покажу разницу. Если в выписке есть строка <b>Debit</b>, она подставится автоматически.</div>`;
   }
 
+  // --- кнопка перехода к созданию задачи в Lark (с подстановкой Expected/Refunded) ---
+  const params = new URLSearchParams();
+  params.set("expected", balance.toFixed(2));
+  if(refunded != null) params.set("refunded", refunded.toFixed(2));
+  document.getElementById("taskAction").innerHTML =
+    `<a class="tasklink" href="task.html?${params.toString()}" target="_blank" rel="noopener">📋 Создать задачу в Lark →</a>`;
+
   const colorOf = {topup:"var(--green)",spend:"var(--red)",fee:"var(--amber)",
                    withdraw:"var(--red)",decline:"var(--graytype)",creation:"var(--accent)"};
   document.getElementById("stats").innerHTML = TYPES.map(t=>{
@@ -424,6 +438,7 @@ document.getElementById("clear").addEventListener("click", ()=>{
   document.getElementById("input").value="";
   const ref=document.getElementById("refunded"); ref.value=""; delete ref.dataset.manual;
   document.getElementById("reconcile").className="reconcile";
+  document.getElementById("taskAction").innerHTML="";
   document.getElementById("result").style.display="none";
   document.getElementById("parsedHint").textContent="Вставьте транзакции — расчёт произойдёт автоматически";
   document.getElementById("input").focus();
