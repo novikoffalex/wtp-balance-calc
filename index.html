@@ -112,12 +112,11 @@ TOP_UP	ПОПОЛНЕНИЕ	200.00	USD	Deposit	—	21.06.2026, 00:45 UTC
 ..."></textarea>
     <div class="refrow">
       <label class="lbl" for="refunded" style="margin:0">Refunded — сколько вернул провайдер ($), для сверки:</label>
-      <input id="refunded" type="text" inputmode="decimal" placeholder="напр. 49.71" autocomplete="off">
+      <input id="refunded" type="text" inputmode="decimal" placeholder="авто из строки Debit" autocomplete="off">
     </div>
     <div class="row">
-      <button id="calc">Посчитать Expected</button>
       <button id="clear" class="ghost">Очистить</button>
-      <span class="hint" id="parsedHint"></span>
+      <span class="hint" id="parsedHint">Вставьте транзакции — расчёт произойдёт автоматически</span>
     </div>
   </div>
 
@@ -129,8 +128,9 @@ TOP_UP	ПОПОЛНЕНИЕ	200.00	USD	Deposit	—	21.06.2026, 00:45 UTC
         <div class="bnote">Пополнения − траты (auth) − комиссии − выводы. Деклайны на баланс не влияют (учтены только их комиссии).</div>
       </div>
       <div style="text-align:right">
-        <div class="blabel">Всего списано (траты + комиссии + выводы)</div>
-        <div class="bval neg" id="spentVal" style="font-size:26px">—</div>
+        <div class="blabel">Refunded — вернул провайдер</div>
+        <div class="bval" id="refundedVal" style="font-size:32px">—</div>
+        <div class="bnote" id="spentNote" style="margin-left:auto">Всего списано: <span id="spentVal">—</span></div>
       </div>
     </div>
 
@@ -204,7 +204,8 @@ function parseAmount(line){
 function isDateLike(s){ return /^\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}/.test(s) || /^\d{4}-\d{2}-\d{2}/.test(s) || /\d{1,2}:\d{2}/.test(s); }
 
 function normNum(raw){
-  let s = String(raw).replace(/\s|USD/gi,"").trim();
+  // убираем всё кроме цифр, разделителей и минуса: пробелы, USD, $, € и т.п.
+  let s = String(raw).replace(/[^\d.,-]/g,"").trim();
   if(!s) return null;
   const hasDot = s.includes("."), hasComma = s.includes(",");
   if(hasDot && hasComma){
@@ -331,15 +332,19 @@ function calculate(){
     if(t.sign < 0) spent += c.sum;
   });
 
+  const refunded = normNum(refInput.value);
+  const autoRef = refund > 0 && !refInput.dataset.manual;
+
   // --- вывод ---
   document.getElementById("balanceVal").textContent = fmt(balance);
   document.getElementById("balanceVal").className = "bval " + (balance>=0?"pos":"neg");
   document.getElementById("spentVal").textContent = fmt(spent);
+  const rv = document.getElementById("refundedVal");
+  rv.textContent = refunded!=null ? fmt(refunded) : "—";
+  rv.className = "bval";
 
   // --- сверка Expected vs Refunded ---
   const recBox = document.getElementById("reconcile");
-  const refunded = normNum(refInput.value);
-  const autoRef = refund > 0 && !refInput.dataset.manual;
   if(refunded != null){
     const delta = balance - refunded;            // Expected − Refunded
     const ok = Math.abs(delta) < 0.01;
@@ -399,19 +404,23 @@ function calculate(){
 
 function escapeHtml(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 
-document.getElementById("calc").addEventListener("click", calculate);
 document.getElementById("clear").addEventListener("click", ()=>{
   document.getElementById("input").value="";
   const ref=document.getElementById("refunded"); ref.value=""; delete ref.dataset.manual;
   document.getElementById("reconcile").className="reconcile";
   document.getElementById("result").style.display="none";
-  document.getElementById("parsedHint").textContent="";
+  document.getElementById("parsedHint").textContent="Вставьте транзакции — расчёт произойдёт автоматически";
   document.getElementById("input").focus();
 });
-document.getElementById("input").addEventListener("paste", ()=>setTimeout(calculate,30));
+// авто-расчёт по любому изменению поля транзакций (ввод/вставка)
+let calcTimer;
+document.getElementById("input").addEventListener("input", ()=>{
+  clearTimeout(calcTimer); calcTimer = setTimeout(calculate, 200);
+});
 document.getElementById("refunded").addEventListener("input", (e)=>{
-  e.target.dataset.manual = "1";  // юзер ввёл вручную — не перетирать авто-значением из Debit
-  if(document.getElementById("result").style.display==="block") calculate();
+  if(e.target.value.trim()) e.target.dataset.manual = "1";  // ручной ввод имеет приоритет
+  else delete e.target.dataset.manual;                       // пусто -> снова авто из Debit
+  if(document.getElementById("input").value.trim()) calculate();
 });
 </script>
 </body>
