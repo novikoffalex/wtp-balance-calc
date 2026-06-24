@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WTP · Lark OAuth — код авторизации</title>
+<style>
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:#0f1115;color:#e7eaf0;line-height:1.5;padding:40px 20px;display:flex;justify-content:center}
+  .card{max-width:640px;width:100%;background:#171a21;border:1px solid #2a2f3a;border-radius:14px;padding:24px}
+  h1{font-size:19px;margin:0 0 14px}
+  .lbl{color:#8b93a3;font-size:13px;margin:14px 0 6px}
+  .box{background:#1e222b;border:1px solid #2a2f3a;border-radius:9px;padding:12px 14px;
+    font-family:ui-monospace,Menlo,monospace;font-size:13px;word-break:break-all;user-select:all}
+  button{margin-top:14px;background:#3a6dff;color:#fff;border:none;border-radius:10px;
+    padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer}
+  button:hover{background:#5b8cff}
+  .ok{color:#34d399} .err{color:#f87171}
+  .hint{color:#8b93a3;font-size:12.5px;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🔑 Lark OAuth — код авторизации</h1>
+  <div id="result"></div>
+  <div class="hint">Скопируй <b>code</b> и пришли его в чат. Код живёт несколько минут — не тяни.</div>
+</div>
+<script>
+  const p = new URLSearchParams(location.search);
+  const code = p.get("code");
+  const state = p.get("state");
+  const err = p.get("error");
+  const r = document.getElementById("result");
+  if(err){
+    r.innerHTML = `<div class="err">Ошибка авторизации: ${err}<br>${p.get("error_description")||""}</div>`;
+  } else if(code){
+    r.innerHTML = `<div class="ok">✅ Успешно. Вот код авторизации:</div>
+      <div class="lbl">code</div><div class="box" id="code">${code}</div>
+      <div class="lbl">state</div><div class="box">${state||"—"}</div>
+      <button onclick="navigator.clipboard.writeText(document.getElementById('code').innerText).then(()=>this.textContent='Скопировано ✅')">Скопировать code</button>`;
+  } else {
+    r.innerHTML = `<div class="err">Нет параметра <b>code</b> в URL. Открой эту страницу через ссылку входа Lark.</div>`;
+  }
+</script>
+</body>
+</html>
