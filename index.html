@@ -240,21 +240,27 @@ function colType(line){
   return map[s] || null;
 }
 function pickCat(cats){ for(const t of TYPES){ if(cats.includes(t.key)) return t.key; } return null; }
+// строка-возврат: мерчант ровно «Debit» (по договорённости = Refunded провайдера)
+function isRefundMerchant(m){ return /^debit$/i.test((m||"").trim()); }
 
 function buildColumnRecords(lines){
   let orient=null;
   for(const l of lines){ if(colAmount(l)!=null){orient="amountFirst";break;} if(colType(l)){orient="typeFirst";break;} }
   if(!orient) return [];
-  const recs=[]; let cur=null, pend=[];
+  const recs=[]; let cur=null, pend=[], pendMerchant=null;
   for(const l of lines){
     const amt=colAmount(l), ct=colType(l);
     if(amt!=null){
-      if(orient==="typeFirst"){ recs.push({amt, cats:pend}); pend=[]; }
-      else { cur={amt, cats:[]}; recs.push(cur); }
+      if(orient==="typeFirst"){ recs.push({amt, cats:pend, merchant:pendMerchant}); pend=[]; pendMerchant=null; }
+      else { cur={amt, cats:[], merchant:null}; recs.push(cur); }
     } else if(ct){
       if(orient==="typeFirst") pend.push(ct);
       else if(cur) cur.cats.push(ct);
       else pend.push(ct);
+    } else if(!isDateLike(l)){
+      // строка-мерчант (текст, не дата)
+      if(orient==="typeFirst") pendMerchant = l;
+      else if(cur && !cur.merchant) cur.merchant = l;
     }
   }
   if(orient==="amountFirst" && pend.length && recs.length) recs[0].cats.unshift(...pend);
@@ -266,25 +272,34 @@ function buildRecords(rawLines){
   const lines = rawLines
     .filter(l => !/^(ТИП|TYPE|СУММА|AMOUNT|МАГАЗИН|ВАЛЮТА|CURRENCY|ДАТА|DATE|ОШИБКА|ERROR|МЕРЧАНТ)$/i.test(l));
   // строчный: в строке есть И тип, И сумма
-  const rowRecs=[], rowUnparsed=[];
+  const rowRecs=[], rowUnparsed=[]; let rowRefund=0;
   for(const line of lines){
     const t=classify(line), amt=parseAmount(line);
-    if(t && amt!=null) rowRecs.push({t, amt, line});
-    else rowUnparsed.push(line);
+    if(t && amt!=null){
+      // мерчант ровно «Debit» в строке -> это возврат (Refunded), не трата
+      const tokens=line.split(/\t+|\s{2,}/).map(s=>s.trim());
+      if(tokens.some(isRefundMerchant)) rowRefund += amt;
+      else rowRecs.push({t, amt, line});
+    } else rowUnparsed.push(line);
   }
-  if(rowRecs.length>=2) return {records:rowRecs, unparsed:rowUnparsed, mode:"row"};
+  if(rowRecs.length>=2 || (rowRecs.length>=1 && rowRefund>0))
+    return {records:rowRecs, unparsed:rowUnparsed, mode:"row", refund:rowRefund};
   // колоночный
   const colRecs=buildColumnRecords(lines);
   const good=colRecs.filter(r=>r.cats.length);
   if(good.length>=1){
-    const records=good.map(r=>{
+    let refund=0;
+    const records=good.filter(r=>{
+      if(isRefundMerchant(r.merchant)){ refund += r.amt; return false; }  // Debit -> Refunded
+      return true;
+    }).map(r=>{
       const key=pickCat(r.cats);
       return {t:TYPES.find(x=>x.key===key), amt:r.amt, line:`[${r.cats.join("/")}] ${fmt(r.amt)}`};
     }).filter(r=>r.t);
     const unparsed=colRecs.filter(r=>!r.cats.length).map(r=>`сумма ${fmt(r.amt)} без типа`);
-    return {records, unparsed, mode:"column"};
+    return {records, unparsed, mode:"column", refund};
   }
-  return {records:rowRecs, unparsed:rowUnparsed, mode:"row"};
+  return {records:rowRecs, unparsed:rowUnparsed, mode:"row", refund:rowRefund};
 }
 
 function calculate(){
@@ -293,8 +308,14 @@ function calculate(){
 
   const cats = {}; TYPES.forEach(t=>cats[t.key]={t, count:0, sum:0});
 
-  const { records: parsed, unparsed } = buildRecords(lines);
+  const { records: parsed, unparsed, refund } = buildRecords(lines);
   for(const r of parsed){ cats[r.t.key].count++; cats[r.t.key].sum += r.amt; }
+
+  // строка(и) Debit = Refunded: авто-подстановка, если юзер не вводил вручную
+  const refInput = document.getElementById("refunded");
+  if(refund > 0 && !refInput.dataset.manual){
+    refInput.value = refund.toFixed(2);
+  }
 
   if(parsed.length===0){
     document.getElementById("parsedHint").textContent = "Не удалось разобрать ни одной строки — проверь формат вставки.";
@@ -317,15 +338,16 @@ function calculate(){
 
   // --- сверка Expected vs Refunded ---
   const recBox = document.getElementById("reconcile");
-  const refunded = normNum(document.getElementById("refunded").value);
+  const refunded = normNum(refInput.value);
+  const autoRef = refund > 0 && !refInput.dataset.manual;
   if(refunded != null){
     const delta = balance - refunded;            // Expected − Refunded
     const ok = Math.abs(delta) < 0.01;
     recBox.className = "reconcile show " + (ok ? "ok" : "bad");
     recBox.innerHTML =
       `<div class="rtitle">${ok ? "✅ Сходится" : "⚠️ Расхождение"}</div>
-       <div class="rline"><span>Expected (расчётный баланс)</span><span>${fmt(balance)}</span></div>
-       <div class="rline"><span>Refunded (вернул провайдер)</span><span>${fmt(refunded)}</span></div>
+       <div class="rline"><span>Expected (должно быть на балансе)</span><span>${fmt(balance)}</span></div>
+       <div class="rline"><span>Refunded (вернул провайдер)${autoRef?' · из строки Debit':''}</span><span>${fmt(refunded)}</span></div>
        <div class="rline rdelta"><span>Разница (Expected − Refunded)</span>
          <span class="${ok?'pos':'neg'}">${fmt(delta)}</span></div>
        ${ok ? "" : `<div class="bnote" style="margin-top:8px">Расхождение ${fmt(Math.abs(delta))} — основание для вопроса провайдеру.</div>`}`;
@@ -380,12 +402,15 @@ function escapeHtml(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">
 document.getElementById("calc").addEventListener("click", calculate);
 document.getElementById("clear").addEventListener("click", ()=>{
   document.getElementById("input").value="";
+  const ref=document.getElementById("refunded"); ref.value=""; delete ref.dataset.manual;
+  document.getElementById("reconcile").className="reconcile";
   document.getElementById("result").style.display="none";
   document.getElementById("parsedHint").textContent="";
   document.getElementById("input").focus();
 });
 document.getElementById("input").addEventListener("paste", ()=>setTimeout(calculate,30));
-document.getElementById("refunded").addEventListener("input", ()=>{
+document.getElementById("refunded").addEventListener("input", (e)=>{
+  e.target.dataset.manual = "1";  // юзер ввёл вручную — не перетирать авто-значением из Debit
   if(document.getElementById("result").style.display==="block") calculate();
 });
 </script>
