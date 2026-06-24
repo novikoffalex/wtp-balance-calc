@@ -174,7 +174,7 @@ const TYPES = [
   { key:"creation", sign:0,  label:"Выпуск карты",badge:"b-creation", cls:"",
     kw:[/\bcreation\b/i, /\bcard created\b/i, /создани/i] },
   { key:"spend",    sign:-1, label:"Траты (auth)",badge:"b-spend",    cls:"",
-    kw:[/\bauth\b/i, /\bdebit\b/i, /авторизац/i, /трат/i] },
+    kw:[/\bauth\b/i, /\bpending\b/i, /\bdebit\b/i, /авторизац/i, /успешн/i, /трат/i] },
 ];
 
 function classify(line){
@@ -230,13 +230,15 @@ function colAmount(line){
 // строка-тип: вся строка = одиночный тип (НЕ «debit» — это мерчант в этой админке)
 function colType(line){
   const s = line.toUpperCase().replace(/[^A-ZА-Я]/g,"");
+  // ВАЖНО: только канонические ТИПЫ. НЕ включать слова-мерчанты (Deposit, Card created)
+  // — в колоночном режиме они идут отдельной строкой и «протекли» бы в следующую запись.
   const map = {
-    AUTH:"spend", АВТОРИЗАЦИЯ:"spend", ТРАТА:"spend",
-    TOPUP:"topup", ПОПОЛНЕНИЕ:"topup", DEPOSIT:"topup",
-    FEE:"fee", КОМИССИЯ:"fee",
+    AUTH:"spend", PENDING:"spend", АВТОРИЗАЦИЯ:"spend", УСПЕШНАЯАВТОРИЗАЦИЯ:"spend", ТРАТА:"spend",
+    TOPUP:"topup", ПОПОЛНЕНИЕ:"topup",
+    FEE:"fee", КОМИССИЯ:"fee", КОММИССИЯ:"fee",
     WITHDRAW:"withdraw", WITHDRAWAL:"withdraw", ВЫВОД:"withdraw",
     DECLINE:"decline", ОТКЛОНЕНО:"decline",
-    CREATION:"creation", СОЗДАНИЕ:"creation", CARDCREATED:"creation",
+    CREATION:"creation", СОЗДАНИЕ:"creation",
   };
   return map[s] || null;
 }
